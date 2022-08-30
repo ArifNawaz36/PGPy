@@ -20,10 +20,11 @@ from cryptography.hazmat.primitives.ciphers import algorithms
 
 from .decorators import classproperty
 from .types import FlagEnum
-from ._curves import BrainpoolP256R1, BrainpoolP384R1, BrainpoolP512R1
+from ._curves import BrainpoolP256R1, BrainpoolP384R1, BrainpoolP512R1, X25519, Ed25519
 
 __all__ = ['Backend',
            'EllipticCurveOID',
+           'ECPointFormat',
            'PacketTag',
            'SymmetricKeyAlgorithm',
            'PubKeyAlgorithm',
@@ -33,6 +34,7 @@ __all__ = ['Backend',
            'ImageEncoding',
            'SignatureType',
            'KeyServerPreferences',
+           'S2KGNUExtension',
            'String2KeyType',
            'TrustLevel',
            'KeyFlags',
@@ -51,19 +53,14 @@ class Backend(Enum):
 
 
 class EllipticCurveOID(Enum):
+    """OIDs for supported elliptic curves."""
     # these are specified as:
     # id = (oid, curve)
     Invalid = ('', )
     #: DJB's fast elliptic curve
-    #:
-    #: .. warning::
-    #:     This curve is not currently usable by PGPy
-    Curve25519 = ('1.3.6.1.4.1.3029.1.5.1', )
+    Curve25519 = ('1.3.6.1.4.1.3029.1.5.1', X25519)
     #: Twisted Edwards variant of Curve25519
-    #:
-    #: .. warning::
-    #:     This curve is not currently usable by PGPy
-    Ed25519 = ('1.3.6.1.4.1.11591.15.1', )
+    Ed25519 = ('1.3.6.1.4.1.11591.15.1', Ed25519)
     #: NIST P-256, also known as SECG curve secp256r1
     NIST_P256 = ('1.2.840.10045.3.1.7', ec.SECP256R1)
     #: NIST P-384, also known as SECG curve secp384r1
@@ -132,6 +129,14 @@ class EllipticCurveOID(Enum):
         return algs.get(self.key_size, None)
 
 
+class ECPointFormat(IntEnum):
+    # https://tools.ietf.org/html/draft-ietf-openpgp-rfc4880bis-07#appendix-B
+    Standard = 0x04
+    Native = 0x40
+    OnlyX = 0x41
+    OnlyY = 0x42
+
+
 class PacketTag(IntEnum):
     Invalid = 0
     PublicKeyEncryptedSessionKey = 1
@@ -156,8 +161,7 @@ class PacketTag(IntEnum):
 class SymmetricKeyAlgorithm(IntEnum):
     """Supported symmetric key algorithms."""
     Plaintext = 0x00
-    #: .. warning::
-    #:     IDEA is insecure. PGPy only allows it to be used for decryption, not encryption!
+    #: .. warning:: IDEA is insecure. PGPy only allows it to be used for decryption, not encryption!
     IDEA = 0x01
     #: Triple-DES with 168-bit key derived from 192
     TripleDES = 0x02
@@ -200,6 +204,10 @@ class SymmetricKeyAlgorithm(IntEnum):
         raise NotImplementedError(repr(self))
 
     @property
+    def is_supported(self):
+        return callable(self.cipher)
+
+    @property
     def is_insecure(self):
         insecure_ciphers = {SymmetricKeyAlgorithm.IDEA}
         return self in insecure_ciphers
@@ -235,6 +243,7 @@ class SymmetricKeyAlgorithm(IntEnum):
 
 
 class PubKeyAlgorithm(IntEnum):
+    """Supported public key algorithms."""
     Invalid = 0x00
     #: Signifies that a key is an RSA key.
     RSAEncryptOrSign = 0x01
@@ -249,14 +258,16 @@ class PubKeyAlgorithm(IntEnum):
     #: Signifies that a key is an ECDSA key.
     ECDSA = 0x13
     FormerlyElGamalEncryptOrSign = 0x14  # deprecated - do not generate
-    # DiffieHellman = 0x15  # X9.42
+    DiffieHellman = 0x15  # X9.42
+    EdDSA = 0x16  # https://tools.ietf.org/html/draft-koch-eddsa-for-openpgp-04
 
     @property
     def can_gen(self):
         return self in {PubKeyAlgorithm.RSAEncryptOrSign,
                         PubKeyAlgorithm.DSA,
                         PubKeyAlgorithm.ECDSA,
-                        PubKeyAlgorithm.ECDH}
+                        PubKeyAlgorithm.ECDH,
+                        PubKeyAlgorithm.EdDSA}
 
     @property
     def can_encrypt(self):  # pragma: no cover
@@ -264,7 +275,7 @@ class PubKeyAlgorithm(IntEnum):
 
     @property
     def can_sign(self):
-        return self in {PubKeyAlgorithm.RSAEncryptOrSign, PubKeyAlgorithm.DSA, PubKeyAlgorithm.ECDSA}
+        return self in {PubKeyAlgorithm.RSAEncryptOrSign, PubKeyAlgorithm.DSA, PubKeyAlgorithm.ECDSA, PubKeyAlgorithm.EdDSA}
 
     @property
     def deprecated(self):
@@ -274,6 +285,7 @@ class PubKeyAlgorithm(IntEnum):
 
 
 class CompressionAlgorithm(IntEnum):
+    """Supported compression algorithms."""
     #: No compression
     Uncompressed = 0x00
     #: ZIP DEFLATE
@@ -318,6 +330,7 @@ class CompressionAlgorithm(IntEnum):
 
 
 class HashAlgorithm(IntEnum):
+    """Supported hash algorithms."""
     Invalid = 0x00
     MD5 = 0x01
     SHA1 = 0x02
@@ -333,7 +346,7 @@ class HashAlgorithm(IntEnum):
 
     def __init__(self, *args):
         super(self.__class__, self).__init__()
-        self._tuned_count = 0
+        self._tuned_count = 255
 
     @property
     def hasher(self):
@@ -345,39 +358,15 @@ class HashAlgorithm(IntEnum):
 
     @property
     def tuned_count(self):
-        if self._tuned_count == 0:
-            self.tune_count()
-
         return self._tuned_count
 
-    def tune_count(self):
-        start = end = 0
-        htd = _hashtunedata[:]
-
-        while start == end:
-            # potentially do this multiple times in case the resolution of time.time is low enough that
-            # hashing 100 KiB isn't enough time to produce a measurable difference
-            # (e.g. if the timer for time.time doesn't have enough precision)
-            htd = htd + htd
-            h = self.hasher
-
-            start = time.time()
-            h.update(htd)
-            end = time.time()
-
-        # now calculate how many bytes need to be hashed to reach our expected time period
-        # GnuPG tunes for about 100ms, so we'll do that as well
-        _TIME = 0.100
-        ct = int(len(htd) * (_TIME / (end - start)))
-        c1 = ((ct >> (ct.bit_length() - 5)) - 16)
-        c2 = (ct.bit_length() - 11)
-        c = ((c2 << 4) + c1)
-
-        # constrain self._tuned_count to be between 0 and 255
-        self._tuned_count = max(min(c, 255), 0)
+    @property
+    def is_supported(self):
+        return True
 
 
 class RevocationReason(IntEnum):
+    """Reasons explaining why a key or certificate was revoked."""
     #: No reason was specified. This is the default reason.
     NotSpecified = 0x00
     #: The key was superseded by a new key. Only meaningful when revoking a key.
@@ -403,25 +392,87 @@ class ImageEncoding(IntEnum):
 
 
 class SignatureType(IntEnum):
+    """Types of signatures that can be found in a Signature packet."""
+
+    #: The signer either owns this document, created it, or certifies that it
+    #: has not been modified.
     BinaryDocument = 0x00
+
+    #: The signer either owns this document, created it, or certifies that it
+    #: has not been modified.  The signature is calculated over the text
+    #: data with its line endings converted to ``<CR><LF>``.
     CanonicalDocument = 0x01
+
+    #: This signature is a signature of only its own subpacket contents.
+    #: It is calculated identically to a signature over a zero-length
+    #: ``BinaryDocument``.
     Standalone = 0x02
+
+    #: The issuer of this certification does not make any particular
+    #: claim as to how well the certifier has checked that the owner
+    #: of the key is in fact the person described by the User ID.
     Generic_Cert = 0x10
+
+    #: The issuer of this certification has not done any verification of
+    #: the claim that the owner of this key is the User ID specified.
     Persona_Cert = 0x11
+
+    #: The issuer of this certification has done some casual
+    #: verification of the claim of identity.
     Casual_Cert = 0x12
+
+    #: The issuer of this certification has done substantial
+    #: verification of the claim of identity.
     Positive_Cert = 0x13
+
+    #: This signature is issued by the primary key over itself and its user ID (or user attribute).
+    #: See `draft-ietf-openpgp-rfc4880bis-08 <https://tools.ietf.org/html/draft-ietf-openpgp-rfc4880bis-08#section-5.2.1>`_
+    Attestation = 0x16
+
+    #: This signature is a statement by the top-level signing key that
+    #: indicates that it owns the subkey.  This signature is calculated
+    #: directly on the primary key and subkey, and not on any User ID or
+    #: other packets.
     Subkey_Binding = 0x18
+
+    #: This signature is a statement by a signing subkey, indicating
+    #: that it is owned by the primary key and subkey. This signature
+    #: is calculated the same way as a ``Subkey_Binding`` signature.
     PrimaryKey_Binding = 0x19
+
+    #: A signature calculated directly on a key.  It binds the
+    #: information in the Signature subpackets to the key, and is
+    #: appropriate to be used for subpackets that provide information
+    #: about the key, such as the Revocation Key subpacket.  It is also
+    #: appropriate for statements that non-self certifiers want to make
+    #: about the key itself, rather than the binding between a key and a
+    #: name.
     DirectlyOnKey = 0x1F
+
+    #: A signature calculated directly on the key being revoked.
+    #: Only revocation signatures by the key being revoked, or by an
+    #: authorized revocation key, should be considered valid revocation signatures.
     KeyRevocation = 0x20
+
+    #: A signature calculated directly on the subkey being revoked.
+    #: Only revocation signatures by the top-level signature key that is bound to this subkey,
+    #: or by an authorized revocation key, should be considered valid revocation signatures.
     SubkeyRevocation = 0x28
+
+    #: This signature revokes an earlier User ID certification signature or direct-key signature.
+    #: It should be issued by the same key that issued the revoked signature or an authorized revocation key.
+    #: The signature is computed over the same data as the certificate that it revokes.
     CertRevocation = 0x30
+
+    #: This signature is only meaningful for the timestamp contained in it.
     Timestamp = 0x40
+
+    #: This signature is a signature over some other OpenPGP Signature
+    #: packet(s).  It is analogous to a notary seal on the signed data.
     ThirdParty_Confirmation = 0x50
 
 
-class KeyServerPreferences(IntEnum):
-    Unknown = 0x00
+class KeyServerPreferences(FlagEnum):
     NoModify = 0x80
 
 
@@ -430,6 +481,12 @@ class String2KeyType(IntEnum):
     Salted = 1
     Reserved = 2
     Iterated = 3
+    GNUExtension = 101
+
+
+class S2KGNUExtension(IntEnum):
+    NoSecret = 1
+    Smartcard = 2
 
 
 class TrustLevel(IntEnum):
@@ -443,6 +500,7 @@ class TrustLevel(IntEnum):
 
 
 class KeyFlags(FlagEnum):
+    """Flags that determine a key's capabilities."""
     #: Signifies that a key may be used to certify keys and user ids. Primary keys always have this, even if it is not specified.
     Certify = 0x01
     #: Signifies that a key may be used to sign messages and documents.

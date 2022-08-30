@@ -1,4 +1,3 @@
 #!/bin/bash
-# make sure libffi-dev, gnupg2, and pgpdump are installed
-sudo apt-get update
-sudo apt-get install -y libffi-dev gnupg2 pgpdump
+sudo apt-get -y update
+sudo apt-get -y install libffi-dev gnupg2 libgpgme-dev swig

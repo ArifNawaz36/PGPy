@@ -1,36 +1,36 @@
+dist: xenial
 os:
   - linux
-  - osx
+  # - osx
 language: python
 python:
+  - "3.8"
+  - "3.7"
   - "3.6"
   - "3.5"
-  - "3.4"
-  - "3.3"
-  - "2.7"
-  - "pypy"
   - "pypy3"
-matrix:
+jobs:
   include:
     # add a pep8 test
     - python: 3.6
       env: TOXENV=pep8
 
     # test setup.py using each tested version
+    - python: 3.8
+      env: TOXENV=py38-setup
+
+    - python: 3.7
+      env: TOXENV=py37-setup
+
     - python: 3.6
-      env: TOXENV=setup36
+      env: TOXENV=py36-setup
 
     - python: 3.5
-      env: TOXENV=setup35
+      env: TOXENV=py35-setup
 
-    - python: 3.4
-      env: TOXENV=setup34
-
-    - python: 3.3
-      env: TOXENV=setup33
-
-    - python: 2.7
-      env: TOXENV=setup27
+    # do some tests with LC_ALL=C to check for locale variance
+    - python: 3.6
+      env: LC_ALL=C
 
   allow_failures:
     # pep8 failures shouldn't be considered fatal
@@ -39,13 +39,14 @@ matrix:
     - python: "pypy"
     - python: "pypy3"
     # osx, until it's working
-    - os: osx
+    # - os: osx
 
 # install requirements
 install:
+  - sed -i -e 's/^/#/' tests/gnupghome/gpg-agent.conf
   - ./install_dependencies.${TRAVIS_OS_NAME}.sh
-  # ensure tox and coveralls are installed
-  - pip install tox python-coveralls
+  # ensure tox and virtualenv are up to date
+  - pip install -U tox virtualenv
 
 # set TOXENV if it isn't yet
 before_script:
@@ -56,7 +57,3 @@ before_script:
 # run tox
 script:
   - ./tox.sh
-
-# and report coverage to coveralls, but only if this was a pytest run
-after_success:
-  - if [[ "${TOXENV}" == "py"* ]]; then coveralls; fi

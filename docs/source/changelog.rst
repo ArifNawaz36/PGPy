@@ -4,6 +4,114 @@
 Changelog
 *********
 
+v0.5.4
+======
+
+Released: April 16, 2021
+
+.. note::
+
+    PGPy v0.5.x is still compatible with Python 2.7 and 3.4. Support for those versions will be dropped in PGPy v0.6.0.
+
+Bugs Fixed
+----------
+
+* Fixed compatibility break with Python < 3.8 (#368)
+* Fixed importing ABCs from ``collections`` (#328)
+
+Other Changes
+-------------
+
+* Documentation updates
+
+
+v0.5.3
+======
+
+Released: October 6, 2020
+
+.. warning::
+
+    This is the last release that will support Python 2.7 and 3.4. Future releases will require Python 3.5 or greater.
+
+Bugs fixed
+----------
+
+* Passphrases are now encoded as utf-8 instead of latin-1 (#294)
+* PGPUIDs without a selfsig no longer cause crashes (#315)
+* Fixed dash un-escaping to be applied unconditionally (#341, #342)
+* Fix the ordering of one-pass signatures (#302)
+
+Other Changes
+-------------
+
+* Updated unit tests to use `gpg 1.10 <https://pypi.org/project/gpg/1.10.0/>`_
+* Lots of documentation updates and cleanup
+
+v0.5.2
+======
+
+Released: August 1, 2019
+
+Bugs Fixed
+----------
+
+ * Signature subpackets of type 0 cause an infinite parse loop (#252)
+
+v0.5.0
+======
+Released: August 1, 2019
+
+New Features
+------------
+
+ * Add support for Curve25519
+ * Greatly improved Elliptic Curve Point format handling code (special thanks @rot42)
+ * Add support for IssuerFingerprint subpackets (thanks @J08nY)
+ * Add support for Key Revocation signatures
+
+Bugs Fixed
+----------
+
+ * PGPy now correctly resynchronizes the block cipher stream when decrypting EncryptedDataPackets (the ones without MDC). (#160)
+ * PGPy now correctly defaults to SHA256 for keys that have no hash preferences set
+
+Other Changes
+-------------
+
+ * updated library dependencies and unit tests
+
+v0.4.3
+======
+
+Released: August 16, 2017
+
+Bugs Fixed
+----------
+
+ * Private key checksum calculations were not getting stored for ECDSA keys; this has been fixed.
+ * The test suite gpg wrappers have been replaced with use of the `gpg <https://pypi.python.org/pypi/gpg/1.8.0>`_ package. (#171)
+
+v0.4.2
+======
+
+Released: August 9, 2017
+
+New Features
+------------
+
+ * Packets with partial body lengths can now be parsed. For now, these packets are converted to have definite lengths instead. (#95) (#208)
+
+Bugs Fixed
+----------
+ * Private key checksums are now calculated correctly (#172)
+ * PGPKey.decrypt was mistakenly using message.issuers instead of message.encrypters when determining whether or not the key was eligible
+   to attempt decrypting the message (#183)
+ * Fixed an issue with parsing some cleartext messages (#184)
+ * Fixed signing already-encrypted messages (encrypt-then-sign) (#186) (#191)
+ * PGP*.from_blob now correctly raises an exception if given zero-length input (#199) (#200)
+ * Fixed an issue where PGPKey.decrypt would fail with an arcane traceback if the key is passphrase-protected and not unlocked. (#204)
+
 v0.4.1
 ======
 

@@ -12,7 +12,7 @@ from pgpy.constants import SignatureType
 from pgpy.pgp import PGPKey
 from pgpy.pgp import PGPMessage
 from pgpy.pgp import PGPSignature
-
+from pgpy.types import Armorable
 
 blocks = sorted(glob.glob('tests/testdata/blocks/*.asc'))
 block_attrs = {
@@ -133,7 +133,7 @@ block_attrs = {
         [('created',       datetime(2014, 9, 11, 22, 55, 53)),
          ('fingerprint',   "AE15 9FF3 4C1A 2426 B7F8 0F1A 560C F308 EF60 CFA3"),
          ('expires_at',    datetime(2018, 9, 12, 1, 0, 59)),
-         ('is_expired',    False),
+         ('is_expired',    True),
          ('is_primary',    True),
          ('is_protected',  False),
          ('is_public',     True),
@@ -329,3 +329,26 @@ class TestBlocks(object):
             if attrval != val:
                 raise AssertionError('expected block.{attr:s} = {aval}; got block.{attr:s} = {rval}'
                                      ''.format(attr=attr, aval=val, rval=attrval))
+
+
+armored = glob.glob('tests/testdata/*/*.asc')
+txt = glob.glob('tests/testdata/files/*.txt')
+binary = glob.glob('tests/testdata/files/*.bin')
+raw = txt + binary
+
+# armor matching test
+class TestMatching(object):
+    @pytest.mark.parametrize('armored', armored, ids=[os.path.basename(f) for f in armored])
+    def test_is_armor(self, armored):
+        with open(armored) as af:
+            ac = af.read()
+
+        assert Armorable.is_armor(ac)
+
+    @pytest.mark.parametrize('text', raw, ids=[os.path.basename(f) for f in raw])
+    def test_not_armor(self, text):
+        mode = 'r' if text in txt else 'rb'
+        with open(text, mode) as tf:
+            tc = tf.read()
+
+        assert not Armorable.is_armor(tc)

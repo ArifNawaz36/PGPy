@@ -27,12 +27,12 @@ It is possible to generate most types of keys with PGPy now. The process is most
                 ciphers=[SymmetricKeyAlgorithm.AES256, SymmetricKeyAlgorithm.AES192, SymmetricKeyAlgorithm.AES128],
                 compression=[CompressionAlgorithm.ZLIB, CompressionAlgorithm.BZ2, CompressionAlgorithm.ZIP, CompressionAlgorithm.Uncompressed])
 
-Specifying key expiration can be done using the ``key_expires`` keyword when adding the user id. Expiration can be specified
+Specifying key expiration can be done using the ``key_expiration`` keyword when adding the user id. Expiration can be specified
 using a :py:obj:`datetime.datetime` or a :py:obj:`datetime.timedelta` object::
 
     from datetime import timedelta
 
-    # in this example, we'll use fewer preferences for the sake of brevity, and set the key to expire in 10 years
+    # in this example, we'll use fewer preferences for the sake of brevity, and set the key to expire in 1 year
     key = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
     uid = pgpy.PGPUID.new('Nikola Tesla')  # comment and email are optional
 
@@ -40,7 +40,7 @@ using a :py:obj:`datetime.datetime` or a :py:obj:`datetime.timedelta` object::
     key.add_uid(uid, usage={KeyFlags.Sign}, hashes=[HashAlgorithm.SHA512, HashAlgorithm.SHA256],
                 ciphers=[SymmetricKeyAlgorithm.AES256, SymmetricKeyAlgorithm.Camellia256],
                 compression=[CompressionAlgorithm.BZ2, CompressionAlgorithm.Uncompressed],
-                key_expires=timedelta(days=365))
+                key_expiration=timedelta(days=365))
 
 Generating Sub Keys
 ^^^^^^^^^^^^^^^^^^^
@@ -48,7 +48,7 @@ Generating Sub Keys
 Generating a subkey is similar to the process above, except that it requires an existing primary key::
 
     # assuming we already have a primary key, we can generate a new key and add it as a subkey thusly:
-    subkey = pgpy.PGPKey.new(PubKeyAlgorithm.RSA, 4096)
+    subkey = pgpy.PGPKey.new(PubKeyAlgorithm.RSAEncryptOrSign, 4096)
 
     # preferences that are specific to the subkey can be chosen here
     # any preference(s) needed for actions by this subkey that not specified here
@@ -138,8 +138,11 @@ In Python 3::
     # binary
     keybytes = bytes(key)
 
-    # ASCII armored
+    # ASCII armored private key
     keystr = str(key)
+    
+    # ASCII armored public key
+    keystr = str(key.pubkey)
 
 in Python 2::
 

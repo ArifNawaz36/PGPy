@@ -17,14 +17,16 @@ import sys
 import os
 # this needs sphinx-better-theme
 from better import better_theme_path
+from setuptools.config import read_configuration
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('.'))
-sys.path.insert(0, os.path.abspath('../../'))
+_docsrcdir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _docsrcdir)
+sys.path.insert(0, os.path.dirname(os.path.dirname(_docsrcdir)))
 
-from pgpy._author import __version__
+__version__ = read_configuration(os.path.join('..', '..', 'setup.cfg'))['metadata']['version']
 
 # -- General configuration ------------------------------------------------
 
@@ -59,7 +61,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'PGPy'
-copyright = '2014, Michael Greene'
+copyright = '2014-2021, Security Innovation, Inc'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -82,7 +84,10 @@ release = __version__
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = []
+exclude_patterns = [
+    'api/*',
+    'examples/*'
+]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -111,8 +116,10 @@ pygments_style = 'sphinx'
 # -- Options for ext.autodoc ----------------------------------------------
 
 autoclass_content = 'init'
-autodoc_member_order = 'bysource'
-autodoc_default_flags = ['members']
+autodoc_default_options = {
+    'members': True,
+    'member-order': 'bysource'
+}
 
 # -- Options for ext.autosummary ------------------------------------------
 
@@ -125,6 +132,7 @@ numpydoc_show_class_members = False
 # html_theme = 'default'
 html_theme = 'better'
 html_theme_path = [better_theme_path]
+html4_writer = True
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
