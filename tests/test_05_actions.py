@@ -982,7 +982,7 @@ class TestPGPKey_Actions(object):
 
     def test_ignore_flags(self):
         # Test that ignoring key flags works properly
-        pubkey, _ = PGPKey.from_file('tests/testdata/keys/targette.pub.rsa.asc')
+        pubkey, _ = PGPKey.from_file('tests/testdata/keys/integration.pub.rsa.asc')
         msg = PGPMessage.new('secret message')
 
         with pytest.raises(PGPError):
